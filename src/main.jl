@@ -4,7 +4,7 @@ include("utilities.jl")
 function main()
 
     # Pour chaque jeu de données
-    for dataSetName in ["iris", "seeds", "wine"]
+    for dataSetName in ["iris", "seeds", "wine", "blood", "diabetes"]
         
         print("=== Dataset ", dataSetName)
 
@@ -29,7 +29,7 @@ function main()
         
         # Temps limite de la méthode de résolution en secondes
         println("Attention : le temps est fixé à 30s pour permettre de faire des tests rapides. N'hésitez pas à l'augmenter lors du calcul des résultats finaux que vous intégrerez à votre rapport.")
-        time_limit = 30
+        time_limit = 300
 
         # Pour chaque profondeur considérée
         for D in 2:4

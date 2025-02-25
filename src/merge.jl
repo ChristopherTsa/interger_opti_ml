@@ -1,4 +1,9 @@
 include("struct/distance.jl")
+using Statistics
+using Distances
+using Distributions
+using StatsBase
+using LinearAlgebra
 
 """
 Essaie de regrouper des données en commençant par celles qui sont les plus proches.
@@ -167,7 +172,7 @@ Entrées :
 Sorties :
 - vrai si la fusion est possible ; faux sinon.
 """
-function canMerge(c1::Cluster, c2::Cluster, x::Matrix{Float64}, y::Vector{Int})
+function canMerge(c1::Cluster, c2::Cluster, x::Matrix{Float64}, y::Vector{Any})
 
     # Calcul des bornes inférieures si c1 et c2 étaient fusionnés
     mergedLBounds = min.(c1.lBounds, c2.lBounds)
@@ -240,4 +245,335 @@ function merge!(c1::Cluster, c2::Cluster)
     c1.x = vcat(c1.x, c2.x)
     c1.lBounds = min.(c1.lBounds, c2.lBounds)
     c1.uBounds = max.(c1.uBounds, c2.uBounds)    
+end
+
+"""
+Effectue un clustering avec contraintes de classe (Constrained K-means)
+en utilisant must-link (ML) et cannot-link (CL) constraints.
+
+Entrées :
+- x : caractéristiques des données
+- y : classe des données
+- gamma : contrôle le nombre de clusters (n_clusters = n * gamma)
+
+Sorties :
+- clusters : Vector{Cluster} contenant la partition des données
+"""
+function constrainedMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
+    n = size(x, 1)
+    k = ceil(Int, n * gamma)  # desired number of clusters
+    
+    # Special case: gamma = 0 or k = 1
+    # Create one cluster per class
+    if gamma == 0 || k == 1
+        unique_classes = unique(y)
+        clusters = Vector{Cluster}()
+        for class in unique_classes
+            indices = findall(==(class), y)
+            cluster = Cluster()
+            cluster.dataIds = indices
+            cluster.x = x
+            cluster.class = class
+            cluster.lBounds = vec(minimum(x[indices,:], dims=1))
+            cluster.uBounds = vec(maximum(x[indices,:], dims=1))
+            cluster.barycenter = vec(mean(x[indices,:], dims=1))
+            push!(clusters, cluster)
+        end
+        return clusters
+    end
+    
+    # Handle other edge cases
+    if k > n
+        clusters = Vector{Cluster}()
+        for i in 1:n
+            push!(clusters, Cluster(i, x, y))
+        end
+        return clusters
+    end
+    
+    # Initialize k-means++ with class-aware initialization
+    class_centroids = Dict()
+    for class in unique(y)
+        class_indices = findall(==(class), y)
+        class_points = x[class_indices, :]
+        n_class_clusters = max(1, round(Int, k * length(class_indices) / n))
+        class_centroids[class] = kmeans_plus_plus_init(class_points, n_class_clusters)
+    end
+    
+    # Combine all centroids
+    centroids = vcat([class_centroids[class] for class in unique(y)]...)
+    k = size(centroids, 1)  # Update k to actual number of centroids
+    
+    assignments = zeros(Int, n)
+    
+    # K-means iterations with constraints
+    for iter in 1:100
+        old_assignments = copy(assignments)
+        
+        # Assign points to nearest centroid of same class
+        for i in 1:n
+            min_dist = Inf
+            best_cluster = 1
+            
+            for j in 1:k
+                # Only consider clusters that have same class as point
+                if isempty(findall(==(j), assignments)) || y[i] == y[findfirst(==(j), assignments)]
+                    dist = sum((x[i,:] - centroids[j,:]).^2)
+                    if dist < min_dist
+                        min_dist = dist
+                        best_cluster = j
+                    end
+                end
+            end
+            assignments[i] = best_cluster
+        end
+        
+        # Update centroids
+        for j in 1:k
+            points = findall(==(j), assignments)
+            if !isempty(points)
+                centroids[j,:] = vec(mean(x[points,:], dims=1))
+            end
+        end
+        
+        # Check convergence
+        if all(assignments .== old_assignments)
+            break
+        end
+    end
+    
+    # Create final clusters
+    clusters = Vector{Cluster}()
+    for j in 1:k
+        points = findall(==(j), assignments)
+        if !isempty(points)
+            cluster = Cluster()
+            cluster.dataIds = points
+            cluster.x = x
+            cluster.class = y[points[1]]
+            cluster.lBounds = vec(minimum(x[points,:], dims=1))
+            cluster.uBounds = vec(maximum(x[points,:], dims=1))
+            cluster.barycenter = vec(mean(x[points,:], dims=1))
+            push!(clusters, cluster)
+        end
+    end
+    
+    return clusters
+end
+
+"""
+Initialisation k-means++ des centroids
+"""
+function kmeans_plus_plus_init(x::Matrix{Float64}, k::Int)
+    n, d = size(x)
+    
+    # Verify data size
+    if n == 0 || k > n
+        return zeros(k, d)
+    elseif k == 1
+        # Return mean of all points for single cluster
+        return reshape(mean(x, dims=1), 1, d)
+    end
+    
+    centroids = zeros(k, d)
+    
+    # Choose first centroid randomly
+    first = rand(1:n)
+    centroids[1,:] = x[first,:]
+    
+    # Select other centroids
+    for i in 2:k
+        # Calculate minimum squared distances
+        min_dists = [minimum([euclidean(x[j,:], centroids[l,:])^2 
+                    for l in 1:i-1]) for j in 1:n]
+        
+        # Handle potential numerical issues
+        max_dist = maximum(min_dists)
+        if max_dist == 0
+            # If all distances are 0, choose randomly
+            next_centroid = rand(1:n)
+        else
+            # Normalize distances to avoid numerical issues
+            probs = min_dists / max_dist
+            # Ensure no zeros to avoid division issues
+            probs = probs .+ 1e-10
+            # Normalize to create proper probability distribution
+            probs = probs / sum(probs)
+            next_centroid = sample(1:n, Weights(probs))
+        end
+        
+        centroids[i,:] = x[next_centroid,:]
+    end
+    
+    return centroids
+end
+
+"""
+Effectue un clustering guidé par les classes en utilisant LDA pour la réduction de dimension.
+
+Entrées:
+- x : caractéristiques des données (Matrix{Float64})
+- y : classe des données (Vector)
+- gamma : contrôle le nombre de clusters (n_clusters = n * gamma)
+
+Sorties:
+- clusters : Vector{Cluster} contenant la partition des données
+"""
+##############################
+# Helper: myLDA 
+# (A simple LDA implementation from scratch that returns a real projection matrix)
+##############################
+function myLDA(x::Matrix{Float64}, y::Vector)
+    classes = unique(y)
+    n, d = size(x)
+    mean_total = vec(mean(x, dims=1))
+    S_W = zeros(d, d)
+    S_B = zeros(d, d)
+    for c in classes
+        idx = findall(==(c), y)
+        x_c = x[idx, :]  # points for class c
+        mean_c = vec(mean(x_c, dims=1))
+        S_W += (x_c .- mean_c')' * (x_c .- mean_c')
+        diff = mean_c - mean_total
+        S_B += length(idx) * (diff * diff')
+    end
+    # Regularize S_W to avoid singularity.
+    reg = 1e-6 * I(d)
+    S_W_reg = S_W + reg
+    # Solve the generalized eigenvalue problem.
+    eigen_decomp = eigen(S_W_reg \ S_B)
+    # Force real values.
+    eigenvals = real(eigen_decomp.values)
+    eigenvecs = real(eigen_decomp.vectors)
+    sorted_idx = sortperm(eigenvals, rev=true)
+    num_components = min(length(classes) - 1, d)
+    W = eigenvecs[:, sorted_idx[1:num_components]]
+    return W  # d×num_components projection matrix.
+end
+
+##############################
+# LDA-Based Clustering: ldaMerge (Rewritten from scratch)
+##############################
+function ldaMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
+    n, d = size(x)
+    k = ceil(Int, n * gamma)  # desired number of clusters
+
+    # --- Special Cases ---
+    if gamma == 0 || k == 1
+        unique_classes = unique(y)
+        clusters = Vector{Cluster}()
+        for c in unique_classes
+            idx = findall(==(c), y)
+            cluster = Cluster()
+            cluster.dataIds = idx
+            cluster.x = x
+            cluster.class = c
+            cluster.lBounds = vec(minimum(x[idx, :], dims=1))
+            cluster.uBounds = vec(maximum(x[idx, :], dims=1))
+            cluster.barycenter = vec(mean(x[idx, :], dims=1))
+            push!(clusters, cluster)
+        end
+        return clusters
+    elseif k > n
+        clusters = Vector{Cluster}()
+        for i in 1:n
+            push!(clusters, Cluster(i, x, y))
+        end
+        return clusters
+    end
+
+    # --- LDA Dimensionality Reduction ---
+    W = myLDA(x, y)      # d×m projection matrix, where m = min(num_classes-1, d)
+    x_reduced = x * W    # n×m
+
+    n_features = size(x_reduced, 2)
+
+    # --- Centroid Initialization using Class-Aware k-means++ ---
+    centroids = zeros(k, n_features)
+    assignments = zeros(Int, n)
+    current_k = 1
+    unique_classes = unique(y)
+    for c in unique_classes
+        idx = findall(==(c), y)
+        x_class = x_reduced[idx, :]  # points in this class
+        num_points = size(x_class, 1)
+        n_req = max(1, round(Int, k * length(idx) / n))
+        n_class_clusters = min(n_req, num_points)
+        if n_class_clusters > 0
+            class_centroids = kmeans_plus_plus_init(x_class, n_class_clusters)
+            block_size = size(class_centroids, 1)
+            end_idx = current_k + block_size - 1
+            if end_idx > k
+                block_size = k - current_k + 1
+                end_idx = k
+                class_centroids = class_centroids[1:block_size, :]
+            end
+            centroids[current_k:end_idx, :] = class_centroids
+            # Assign each point in this class to the nearest new centroid.
+            for i in idx
+                dists = [sum((x_reduced[i, :] .- centroids[j, :]).^2)
+                         for j in current_k:end_idx]
+                _, best_idx = findmin(dists)
+                assignments[i] = current_k + best_idx - 1
+            end
+            current_k = end_idx + 1
+            if current_k > k
+                break
+            end
+        end
+    end
+    # If any centroids remain uninitialized, assign them randomly.
+    if current_k <= k
+        remaining = setdiff(1:n, assignments)
+        for j in current_k:k
+            random_idx = isempty(remaining) ? rand(1:n) : rand(remaining)
+            centroids[j, :] = x_reduced[random_idx, :]
+        end
+    end
+
+    # --- K-means Iterations in Reduced Space ---
+    for iter in 1:100
+        old_assignments = copy(assignments)
+        # Update centroids.
+        for j in 1:k
+            pts = findall(==(j), assignments)
+            if !isempty(pts)
+                centroids[j, :] = vec(mean(x_reduced[pts, :], dims=1))
+            end
+        end
+        # Reassign each point to its closest centroid (within same original class).
+        for i in 1:n
+            current_class = y[i]
+            valid_centroids = filter(j -> begin
+                    pts = findall(==(j), assignments)
+                    !isempty(pts) && (y[pts[1]] == current_class)
+                end, 1:k)
+            if !isempty(valid_centroids)
+                dists = [sum((x_reduced[i, :] .- centroids[j, :]).^2) for j in valid_centroids]
+                _, best_idx = findmin(dists)
+                assignments[i] = valid_centroids[best_idx]
+            end
+        end
+        if all(assignments .== old_assignments)
+            break
+        end
+    end
+
+    # --- Build Final Clusters ---
+    clusters = Vector{Cluster}()
+    for j in 1:k
+        pts = findall(==(j), assignments)
+        if !isempty(pts)
+            cluster = Cluster()
+            cluster.dataIds = pts
+            cluster.x = x
+            cluster.class = y[pts[1]]
+            cluster.lBounds = vec(minimum(x[pts, :], dims=1))
+            cluster.uBounds = vec(maximum(x[pts, :], dims=1))
+            cluster.barycenter = vec(mean(x[pts, :], dims=1))
+            push!(clusters, cluster)
+        end
+    end
+
+    return clusters
 end

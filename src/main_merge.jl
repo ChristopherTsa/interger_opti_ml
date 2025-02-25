@@ -1,8 +1,25 @@
 include("building_tree.jl")
 include("utilities.jl")
 include("merge.jl")
+using CSV
+using DataFrames
+using Dates
 
 function main_merge()
+
+    # Initialize results DataFrame
+    results = DataFrame(
+        Dataset=String[], 
+        D=Int[], 
+        Method=String[], 
+        Gamma=Float64[], 
+        Clusters=Int[],
+        Gap=Float64[],
+        Train_Errors=Int[],
+        Test_Errors=Int[],
+        Time=Float64[]
+    )
+
     for dataSetName in ["iris", "seeds", "wine"]
         
         print("=== Dataset ", dataSetName)
@@ -17,7 +34,7 @@ function main_merge()
             reducedX[:, j] ./= maximum(X[:, j])
         end
 
-        train, test = train_test_indexes(length(Y))
+        train, test = train_test_indexes(length(Y)) 
         X_train = reducedX[train,:]
         Y_train = Y[train]
         X_test = reducedX[test,:]
@@ -32,26 +49,46 @@ function main_merge()
         for D in 2:4
             println("\tD = ", D)
             println("\t\tUnivarié")
-            testMerge(X_train, Y_train, X_test, Y_test, D, classes, time_limit = time_limit, isMultivariate = false)
+            testMerge(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false)
             println("\t\tMultivarié")
-            testMerge(X_train, Y_train, X_test, Y_test, D, classes, time_limit = time_limit, isMultivariate = true)
+            testMerge(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = true)
         end
     end
+
+    # Create results directory if it doesn't exist
+    mkpath("results")
+    
+    # Save results to CSV with timestamp
+    timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
+    CSV.write("results/clustering_results_$(timestamp).csv", results)
 end 
 
-function testMerge(X_train, Y_train, X_test, Y_test, D, classes; time_limit::Int=-1, isMultivariate::Bool = false)
+function testMerge(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit::Int=-1, isMultivariate::Bool = false)
 
     # Pour tout pourcentage de regroupement considéré
     println("\t\t\tGamma\t\t# clusters\tGap")
     for gamma in 0:0.2:1
         print("\t\t\t", gamma * 100, "%\t\t")
-        clusters = simpleMerge(X_train, Y_train, gamma)
+        clusters = ldaMerge(X_train, Y_train, gamma)
         print(length(clusters), " clusters\t")
         T, obj, resolution_time, gap = build_tree(clusters, D, classes, multivariate = isMultivariate, time_limit = time_limit)
         print(round(gap, digits = 1), "%\t") 
         print("Erreurs train/test : ", prediction_errors(T,X_train,Y_train, classes))
         print("/", prediction_errors(T,X_test,Y_test, classes), "\t")
         println(round(resolution_time, digits=1), "s")
+
+        # Add result to DataFrame
+        push!(results, (
+            dataSetName,
+            D,
+            isMultivariate ? "Multivariate" : "Univariate",
+            gamma,
+            length(clusters),
+            gap,
+            prediction_errors(T,X_train,Y_train, classes),
+            prediction_errors(T,X_test,Y_test, classes),
+            resolution_time
+        ))
     end
     println() 
 end 

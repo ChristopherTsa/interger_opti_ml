@@ -3,8 +3,25 @@ include("utilities.jl")
 include("merge.jl")
 include("main_merge.jl")
 include("shift.jl")
+using CSV
+using DataFrames
+using Dates
 
 function main_iterative()
+    # Initialize results DataFrame
+    results = DataFrame(
+        Dataset=String[], 
+        D=Int[], 
+        Method=String[], 
+        Gamma=Float64[], 
+        Clusters=Int[],
+        Gap=Float64[],
+        Train_Errors=Int[],
+        Test_Errors=Int[],
+        Time=Float64[],
+        Iterations=Int[]
+    )
+
     for dataSetName in ["iris", "seeds", "wine"]
         
         print("=== Dataset ", dataSetName)
@@ -35,13 +52,13 @@ function main_iterative()
             println("\tD = ", D)
             println("\t\tUnivarié")
             println("\t\t\t- Unsplittable clusters (FU)")
-            testMerge(X_train, Y_train, X_test, Y_test, D, classes, time_limit = time_limit, isMultivariate = false)
+            testMerge(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false)
             println("\t\t\t- Iterative heuristic (FhS)")
-            testIterative(X_train, Y_train, X_test, Y_test, D, classes, time_limit = time_limit, isMultivariate = false, isExact=false)
+            testIterative(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false, isExact=false)
             println("\t\t\t- Iterative heuristic (FhS) with shifts")
-            testIterative(X_train, Y_train, X_test, Y_test, D, classes, time_limit = time_limit, isMultivariate = false, isExact=false, shiftSeparations=true)
+            testIterative(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false, isExact=false, shiftSeparations=true)
             println("\t\t\t- Iterative exact (FeS)")
-            testIterative(X_train, Y_train, X_test, Y_test, D, classes, time_limit = time_limit, isMultivariate = false, isExact=true)
+            testIterative(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false, isExact=true)
 
 #            # Do not apply to the multivariate case in the project             
 #            println("\t\tMultivarié")
@@ -53,9 +70,16 @@ function main_iterative()
 #            testIterative(X_train, Y_train, X_test, Y_test, D, classes, time_limit = time_limit, isMultivariate = true, isExact=true)
         end
     end
+
+    # Create results directory if it doesn't exist
+    mkpath("results")
+
+    # Save results to CSV with timestamp
+    timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
+    CSV.write("results/iterative_results_$(timestamp).csv", results)
 end 
 
-function testIterative(X_train, Y_train, X_test, Y_test, D, classes; time_limit::Int=-1, isMultivariate::Bool = false, isExact::Bool=false, shiftSeparations::Bool=false)
+function testIterative(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit::Int=-1, isMultivariate::Bool = false, isExact::Bool=false, shiftSeparations::Bool=false)
 
     # Pour tout pourcentage de regroupement considéré
     println("\t\t\tGamma\t\t# clusters\tGap")
@@ -64,6 +88,29 @@ function testIterative(X_train, Y_train, X_test, Y_test, D, classes; time_limit:
         clusters = simpleMerge(X_train, Y_train, gamma)
         print(length(clusters), " clusters\t")
         T, obj, resolution_time, gap, iterationCount = iteratively_build_tree(clusters, D, X_train, Y_train, classes, multivariate = isMultivariate, time_limit = time_limit, isExact=isExact, shiftSeparations = shiftSeparations)
+        
+        # Add result to DataFrame
+        method = if isExact
+            "Exact (FeS)"
+        elseif shiftSeparations
+            "Heuristic (FhS) with shifts"
+        else
+            "Heuristic (FhS)"
+        end
+
+        push!(results, (
+            dataSetName,
+            D,
+            method,
+            gamma,
+            length(clusters),
+            gap == -1 ? NaN : gap,
+            prediction_errors(T,X_train,Y_train, classes),
+            prediction_errors(T,X_test,Y_test, classes),
+            resolution_time,
+            iterationCount
+        ))
+        
         if gap == -1
             print("???%\t")
         else 

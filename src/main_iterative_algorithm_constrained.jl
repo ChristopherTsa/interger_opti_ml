@@ -22,7 +22,7 @@ function main_iterative()
         Iterations=Int[]
     )
 
-    for dataSetName in ["iris", "seeds", "wine"]
+    for dataSetName in ["iris", "seeds", "wine", "breast_cancer_", "ecoli_"]
         
         print("=== Dataset ", dataSetName)
         
@@ -46,7 +46,7 @@ function main_iterative()
         println(" (train size ", size(X_train, 1), ", test size ", size(X_test, 1), ", ", size(X_train, 2), ", features count: ", size(X_train, 2), ")")
         
         # Temps limite de la méthode de résolution en secondes        
-        time_limit = 30
+        time_limit = 600
 
         for D in 2:4
             println("\tD = ", D)
@@ -76,7 +76,7 @@ function main_iterative()
 
     # Save results to CSV with timestamp
     timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
-    CSV.write("results/iterative_results_$(timestamp).csv", results)
+    CSV.write("results/main_iterative_constrained_results_$(timestamp).csv", results)
 end 
 
 function testIterative(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit::Int=-1, isMultivariate::Bool = false, isExact::Bool=false, shiftSeparations::Bool=false)
@@ -85,7 +85,7 @@ function testIterative(X_train, Y_train, X_test, Y_test, D, classes, results, da
     println("\t\t\tGamma\t\t# clusters\tGap")
     for gamma in 0:0.2:0.8
         print("\t\t\t", gamma * 100, "%\t\t")
-        clusters = simpleMerge(X_train, Y_train, gamma)
+        clusters = constrainedMerge(X_train, Y_train, gamma)
         print(length(clusters), " clusters\t")
         T, obj, resolution_time, gap, iterationCount = iteratively_build_tree(clusters, D, X_train, Y_train, classes, multivariate = isMultivariate, time_limit = time_limit, isExact=isExact, shiftSeparations = shiftSeparations)
         

@@ -10,8 +10,8 @@ include("../src/main_iterative_algorithm_simple.jl")
 
 #main()
 
-main_merge_exact()
 main_merge_constrained()
+main_merge_exact()
 main_merge_lda()
 main_merge_simple()
 

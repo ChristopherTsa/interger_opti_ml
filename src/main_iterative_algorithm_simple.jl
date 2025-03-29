@@ -1,13 +1,13 @@
 include("building_tree.jl")
 include("utilities.jl")
 include("merge.jl")
-include("main_merge.jl")
+include("main_merge_simple.jl")
 include("shift.jl")
 using CSV
 using DataFrames
 using Dates
 
-function main_iterative()
+function main_iterative_simple()
     # Initialize results DataFrame
     results = DataFrame(
         Dataset=String[], 

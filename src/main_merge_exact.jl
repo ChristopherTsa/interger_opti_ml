@@ -5,7 +5,7 @@ using CSV
 using DataFrames
 using Dates
 
-function main_merge()
+function main_merge_exact()
 
     # Initialize results DataFrame
     results = DataFrame(

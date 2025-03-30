@@ -27,7 +27,7 @@ function main_iterative_constrained()
         print("=== Dataset ", dataSetName)
         
         # Préparation des données
-        include("../data/" * dataSetName * ".txt")
+        include(joinpath(@__DIR__, "..", "data", dataSetName * ".txt"))
         
         # Ramener chaque caractéristique sur [0, 1]
         reducedX = Matrix{Float64}(X)
@@ -126,4 +126,4 @@ function testIterative(X_train, Y_train, X_test, Y_test, D, classes, results, da
         end 
     end
     println() 
-end 
+end

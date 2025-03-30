@@ -17,7 +17,8 @@ function main_merge_lda()
         Gap=Float64[],
         Train_Errors=Int[],
         Test_Errors=Int[],
-        Time=Float64[]
+        Time=Float64[],
+        Iterations=Int[]  # Keep this column
     )
 
     for dataSetName in ["iris", "seeds", "wine", "breast_cancer_", "ecoli_"]
@@ -87,8 +88,9 @@ function testMerge(X_train, Y_train, X_test, Y_test, D, classes, results, dataSe
             gap,
             prediction_errors(T,X_train,Y_train, classes),
             prediction_errors(T,X_test,Y_test, classes),
-            resolution_time
+            resolution_time,
+            1  # Iterations column with default value 1
         ))
     end
     println() 
-end 
+end

@@ -172,7 +172,7 @@ Entrées :
 Sorties :
 - vrai si la fusion est possible ; faux sinon.
 """
-function canMerge(c1::Cluster, c2::Cluster, x::Matrix{Float64}, y::Vector{Any})
+function canMerge(c1::Cluster, c2::Cluster, x::Matrix{Float64}, y::Vector{Int})
 
     # Calcul des bornes inférieures si c1 et c2 étaient fusionnés
     mergedLBounds = min.(c1.lBounds, c2.lBounds)
@@ -261,10 +261,10 @@ Sorties :
 """
 function constrainedMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
     n = size(x, 1)
-    k = ceil(Int, n * gamma)  # desired number of clusters
+    k = ceil(Int, n * gamma)  # nombre de clusters souhaité
     
-    # Special case: gamma = 0 or k = 1
-    # Create one cluster per class
+    # Cas particulier : gamma = 0 ou k = 1
+    # On crée un cluster par classe
     if gamma == 0 || k == 1
         unique_classes = unique(y)
         clusters = Vector{Cluster}()
@@ -282,7 +282,7 @@ function constrainedMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
         return clusters
     end
     
-    # Handle other edge cases
+    # Gestion d'autres cas limites
     if k > n
         clusters = Vector{Cluster}()
         for i in 1:n
@@ -291,7 +291,7 @@ function constrainedMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
         return clusters
     end
     
-    # Initialize k-means++ with class-aware initialization
+    # Initialisation k-means++ avec prise en compte des classes
     class_centroids = Dict()
     for class in unique(y)
         class_indices = findall(==(class), y)
@@ -300,23 +300,23 @@ function constrainedMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
         class_centroids[class] = kmeans_plus_plus_init(class_points, n_class_clusters)
     end
     
-    # Combine all centroids
+    # Combinaison de tous les centroides
     centroids = vcat([class_centroids[class] for class in unique(y)]...)
-    k = size(centroids, 1)  # Update k to actual number of centroids
+    k = size(centroids, 1)  # Mise à jour de k au nombre réel de centroides
     
     assignments = zeros(Int, n)
     
-    # K-means iterations with constraints
+    # Itérations K-means avec contraintes
     for iter in 1:100
         old_assignments = copy(assignments)
         
-        # Assign points to nearest centroid of same class
+        # Assignation de chaque point au centroide le plus proche de même classe
         for i in 1:n
             min_dist = Inf
             best_cluster = 1
             
             for j in 1:k
-                # Only consider clusters that have same class as point
+                # Ne considérer que les clusters de même classe que le point
                 if isempty(findall(==(j), assignments)) || y[i] == y[findfirst(==(j), assignments)]
                     dist = sum((x[i,:] - centroids[j,:]).^2)
                     if dist < min_dist
@@ -328,7 +328,7 @@ function constrainedMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
             assignments[i] = best_cluster
         end
         
-        # Update centroids
+        # Mise à jour des centroides
         for j in 1:k
             points = findall(==(j), assignments)
             if !isempty(points)
@@ -336,13 +336,13 @@ function constrainedMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
             end
         end
         
-        # Check convergence
+        # Vérification de la convergence
         if all(assignments .== old_assignments)
             break
         end
     end
     
-    # Create final clusters
+    # Création des clusters finaux
     clusters = Vector{Cluster}()
     for j in 1:k
         points = findall(==(j), assignments)
@@ -362,42 +362,49 @@ function constrainedMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
 end
 
 """
-Initialisation k-means++ des centroids
+Initialise les centroids avec l'algorithme k-means++
+
+Entrées :
+- x : caractéristiques des données
+- k : nombre de centroids à initialiser
+
+Sorties :
+- centroids : matrice des k centroids initialisés
 """
 function kmeans_plus_plus_init(x::Matrix{Float64}, k::Int)
     n, d = size(x)
     
-    # Verify data size
+    # Vérification de la taille des données
     if n == 0 || k > n
         return zeros(k, d)
     elseif k == 1
-        # Return mean of all points for single cluster
+        # Retourner la moyenne de tous les points pour un seul cluster
         return reshape(mean(x, dims=1), 1, d)
     end
     
     centroids = zeros(k, d)
     
-    # Choose first centroid randomly
+    # Choix aléatoire du premier centroide
     first = rand(1:n)
     centroids[1,:] = x[first,:]
     
-    # Select other centroids
+    # Sélection des autres centroides
     for i in 2:k
-        # Calculate minimum squared distances
+        # Calcul des distances minimales au carré
         min_dists = [minimum([euclidean(x[j,:], centroids[l,:])^2 
                     for l in 1:i-1]) for j in 1:n]
         
-        # Handle potential numerical issues
+        # Gestion des problèmes numériques potentiels
         max_dist = maximum(min_dists)
         if max_dist == 0
-            # If all distances are 0, choose randomly
+            # Si toutes les distances sont nulles, choisir aléatoirement
             next_centroid = rand(1:n)
         else
-            # Normalize distances to avoid numerical issues
+            # Normalisation des distances pour éviter des problèmes numériques
             probs = min_dists / max_dist
-            # Ensure no zeros to avoid division issues
+            # S'assurer qu'il n'y a pas de zéros pour éviter des divisions par zéro
             probs = probs .+ 1e-10
-            # Normalize to create proper probability distribution
+            # Normalisation pour créer une distribution de probabilité valide
             probs = probs / sum(probs)
             next_centroid = sample(1:n, Weights(probs))
         end
@@ -409,20 +416,16 @@ function kmeans_plus_plus_init(x::Matrix{Float64}, k::Int)
 end
 
 """
-Effectue un clustering guidé par les classes en utilisant LDA pour la réduction de dimension.
+Implémentation simplifiée de l'Analyse Discriminante Linéaire (LDA)
+pour la réduction de dimension.
 
-Entrées:
-- x : caractéristiques des données (Matrix{Float64})
-- y : classe des données (Vector)
-- gamma : contrôle le nombre de clusters (n_clusters = n * gamma)
+Entrées :
+- x : caractéristiques des données
+- y : classe des données
 
-Sorties:
-- clusters : Vector{Cluster} contenant la partition des données
+Sorties :
+- W : matrice de projection LDA
 """
-##############################
-# Helper: myLDA 
-# (A simple LDA implementation from scratch that returns a real projection matrix)
-##############################
 function myLDA(x::Matrix{Float64}, y::Vector)
     classes = unique(y)
     n, d = size(x)
@@ -431,34 +434,43 @@ function myLDA(x::Matrix{Float64}, y::Vector)
     S_B = zeros(d, d)
     for c in classes
         idx = findall(==(c), y)
-        x_c = x[idx, :]  # points for class c
+        x_c = x[idx, :]  # points de la classe c
         mean_c = vec(mean(x_c, dims=1))
         S_W += (x_c .- mean_c')' * (x_c .- mean_c')
         diff = mean_c - mean_total
         S_B += length(idx) * (diff * diff')
     end
-    # Regularize S_W to avoid singularity.
+    # Régularisation de S_W pour éviter la singularité
     reg = 1e-6 * I(d)
     S_W_reg = S_W + reg
-    # Solve the generalized eigenvalue problem.
+    # Résolution du problème de valeurs propres généralisé
     eigen_decomp = eigen(S_W_reg \ S_B)
-    # Force real values.
+    # Forcer les valeurs réelles
     eigenvals = real(eigen_decomp.values)
     eigenvecs = real(eigen_decomp.vectors)
     sorted_idx = sortperm(eigenvals, rev=true)
     num_components = min(length(classes) - 1, d)
     W = eigenvecs[:, sorted_idx[1:num_components]]
-    return W  # d×num_components projection matrix.
+    return W  # matrice de projection d×num_components
 end
 
-##############################
-# LDA-Based Clustering: ldaMerge (Rewritten from scratch)
-##############################
+"""
+Effectue un clustering guidé par les classes en utilisant LDA 
+pour la réduction de dimension.
+
+Entrées :
+- x : caractéristiques des données
+- y : classe des données
+- gamma : contrôle le nombre de clusters (n_clusters = n * gamma)
+
+Sorties :
+- clusters : Vector{Cluster} contenant la partition des données
+"""
 function ldaMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
     n, d = size(x)
-    k = ceil(Int, n * gamma)  # desired number of clusters
+    k = ceil(Int, n * gamma)  # nombre de clusters souhaité
 
-    # --- Special Cases ---
+    # --- Cas particuliers ---
     if gamma == 0 || k == 1
         unique_classes = unique(y)
         clusters = Vector{Cluster}()
@@ -482,20 +494,20 @@ function ldaMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
         return clusters
     end
 
-    # --- LDA Dimensionality Reduction ---
-    W = myLDA(x, y)      # d×m projection matrix, where m = min(num_classes-1, d)
+    # --- Réduction de dimension par LDA ---
+    W = myLDA(x, y)      # matrice de projection d×m, où m = min(nb_classes-1, d)
     x_reduced = x * W    # n×m
 
     n_features = size(x_reduced, 2)
 
-    # --- Centroid Initialization using Class-Aware k-means++ ---
+    # --- Initialisation des centroides avec k-means++ adapté aux classes ---
     centroids = zeros(k, n_features)
     assignments = zeros(Int, n)
     current_k = 1
     unique_classes = unique(y)
     for c in unique_classes
         idx = findall(==(c), y)
-        x_class = x_reduced[idx, :]  # points in this class
+        x_class = x_reduced[idx, :]  # points de cette classe
         num_points = size(x_class, 1)
         n_req = max(1, round(Int, k * length(idx) / n))
         n_class_clusters = min(n_req, num_points)
@@ -509,7 +521,7 @@ function ldaMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
                 class_centroids = class_centroids[1:block_size, :]
             end
             centroids[current_k:end_idx, :] = class_centroids
-            # Assign each point in this class to the nearest new centroid.
+            # Assigner chaque point de cette classe au nouveau centroide le plus proche
             for i in idx
                 dists = [sum((x_reduced[i, :] .- centroids[j, :]).^2)
                          for j in current_k:end_idx]
@@ -522,7 +534,7 @@ function ldaMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
             end
         end
     end
-    # If any centroids remain uninitialized, assign them randomly.
+    # Si des centroides restent non initialisés, les assigner aléatoirement
     if current_k <= k
         remaining = setdiff(1:n, assignments)
         for j in current_k:k
@@ -531,17 +543,17 @@ function ldaMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
         end
     end
 
-    # --- K-means Iterations in Reduced Space ---
+    # --- Itérations K-means dans l'espace réduit ---
     for iter in 1:100
         old_assignments = copy(assignments)
-        # Update centroids.
+        # Mise à jour des centroides
         for j in 1:k
             pts = findall(==(j), assignments)
             if !isempty(pts)
                 centroids[j, :] = vec(mean(x_reduced[pts, :], dims=1))
             end
         end
-        # Reassign each point to its closest centroid (within same original class).
+        # Réassigner chaque point à son centroide le plus proche (de même classe)
         for i in 1:n
             current_class = y[i]
             valid_centroids = filter(j -> begin
@@ -559,7 +571,7 @@ function ldaMerge(x::Matrix{Float64}, y::Vector, gamma::Float64)
         end
     end
 
-    # --- Build Final Clusters ---
+    # --- Construction des clusters finaux ---
     clusters = Vector{Cluster}()
     for j in 1:k
         pts = findall(==(j), assignments)

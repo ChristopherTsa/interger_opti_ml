@@ -44,7 +44,7 @@ function main_merge_simple()
         println(" (train size ", size(X_train, 1), ", test size ", size(X_test, 1), ", ", size(X_train, 2), ", features count: ", size(X_train, 2), ")")
         
         # Temps limite de la méthode de résolution en secondes        
-        time_limit = 600
+        time_limit = 120
 
         for D in 2:4
             println("\tD = ", D)

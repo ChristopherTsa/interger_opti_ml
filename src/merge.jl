@@ -248,8 +248,13 @@ function merge!(c1::Cluster, c2::Cluster)
 end
 
 """
-Effectue un clustering avec contraintes de classe (Constrained K-means)
-en utilisant must-link (ML) et cannot-link (CL) constraints.
+Effectue un clustering avec contraintes de classe (Class-Constrained K-means)
+où chaque cluster ne contient que des données d'une même classe.
+
+Le clustering est réalisé en:
+- Initialisant les centroides par classe avec k-means++
+- Distribuant proportionnellement le nombre de clusters par classe
+- Garantissant que chaque point est assigné uniquement à un cluster de sa classe
 
 Entrées :
 - x : caractéristiques des données

@@ -52,13 +52,13 @@ function main_iterative_constrained()
             println("\tD = ", D)
             println("\t\tUnivarié")
             println("\t\t\t- Unsplittable clusters (FU)")
-            testMerge(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false)
+            testMerge_constrained(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false)
             println("\t\t\t- Iterative heuristic (FhS)")
-            testIterative(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false, isExact=false)
+            testIterative_constrained(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false, isExact=false)
             println("\t\t\t- Iterative heuristic (FhS) with shifts")
-            testIterative(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false, isExact=false, shiftSeparations=true)
+            testIterative_constrained(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false, isExact=false, shiftSeparations=true)
             println("\t\t\t- Iterative exact (FeS)")
-            testIterative(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false, isExact=true)
+            testIterative_constrained(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false, isExact=true)
 
 #            # Do not apply to the multivariate case in the project             
 #            println("\t\tMultivarié")
@@ -79,7 +79,7 @@ function main_iterative_constrained()
     CSV.write("results/main_iterative_constrained_results_$(timestamp).csv", results)
 end 
 
-function testIterative(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit::Int=-1, isMultivariate::Bool = false, isExact::Bool=false, shiftSeparations::Bool=false)
+function testIterative_constrained(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit::Int=-1, isMultivariate::Bool = false, isExact::Bool=false, shiftSeparations::Bool=false)
 
     # Pour tout pourcentage de regroupement considéré
     println("\t\t\tGamma\t\t# clusters\tGap")

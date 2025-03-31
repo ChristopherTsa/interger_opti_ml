@@ -5,20 +5,19 @@ using CSV
 using DataFrames
 using Dates
 
-function main_merge_constrained()
+function main_merge_exact()
 
     # Initialize results DataFrame
     results = DataFrame(
         Dataset=String[], 
         D=Int[], 
         Method=String[], 
-        Gamma=Float64[], 
         Clusters=Int[],
         Gap=Float64[],
         Train_Errors=Int[],
         Test_Errors=Int[],
         Time=Float64[],
-        Iterations=Int[]  # Adding Iterations column
+        Iterations=Int[]
     )
 
     for dataSetName in ["iris", "seeds", "wine", "breast_cancer_", "ecoli_"]
@@ -50,9 +49,9 @@ function main_merge_constrained()
         for D in 2:4
             println("\tD = ", D)
             println("\t\tUnivarié")
-            testMerge_constrained(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false)
+            testMerge_exact(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false)
             println("\t\tMultivarié")
-            testMerge_constrained(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = true)
+            testMerge_exact(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = true)
         end
     end
 
@@ -61,36 +60,34 @@ function main_merge_constrained()
     
     # Save results to CSV with timestamp
     timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
-    CSV.write("results/main_merge_constrained_results_$(timestamp).csv", results)
+    CSV.write("results/main_merge_exact_results_$(timestamp).csv", results)
 end 
 
-function testMerge_constrained(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit::Int=-1, isMultivariate::Bool = false)
+function testMerge_exact(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit::Int=-1, isMultivariate::Bool = false)
 
     # Pour tout pourcentage de regroupement considéré
-    println("\t\t\tGamma\t\t# clusters\tGap")
-    for gamma in 0:0.2:1
-        print("\t\t\t", gamma * 100, "%\t\t")
-        clusters = constrainedMerge(X_train, Y_train, gamma)
-        print(length(clusters), " clusters\t")
-        T, obj, resolution_time, gap = build_tree(clusters, D, classes, multivariate = isMultivariate, time_limit = time_limit)
-        print(round(gap, digits = 1), "%\t") 
-        print("Erreurs train/test : ", prediction_errors(T,X_train,Y_train, classes))
-        print("/", prediction_errors(T,X_test,Y_test, classes), "\t")
-        println(round(resolution_time, digits=1), "s")
+    println("\t\t\t# clusters\tGap")
+    
+    clusters = exactMerge(X_train, Y_train)
+    print(length(clusters), " clusters\t")
+    T, obj, resolution_time, gap = build_tree(clusters, D, classes, multivariate = isMultivariate, time_limit = time_limit)
+    print(round(gap, digits = 1), "%\t") 
+    print("Erreurs train/test : ", prediction_errors(T,X_train,Y_train, classes))
+    print("/", prediction_errors(T,X_test,Y_test, classes), "\t")
+    println(round(resolution_time, digits=1), "s")
 
-        # Add result to DataFrame
-        push!(results, (
-            dataSetName,
-            D,
-            isMultivariate ? "Multivariate" : "Univariate",
-            gamma,
-            length(clusters),
-            gap,
-            prediction_errors(T,X_train,Y_train, classes),
-            prediction_errors(T,X_test,Y_test, classes),
-            resolution_time,
-            1  # Adding Iterations column with default value 1
-        ))
-    end
+    # Add result to DataFrame
+    push!(results, (
+        dataSetName,
+        D,
+        isMultivariate ? "Multivariate" : "Univariate",
+        length(clusters),
+        gap,
+        prediction_errors(T,X_train,Y_train, classes),
+        prediction_errors(T,X_test,Y_test, classes),
+        resolution_time,
+        1  # Iterations column with default value 1
+    ))
+    
     println() 
 end

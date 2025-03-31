@@ -50,9 +50,9 @@ function main_merge_lda()
         for D in 2:4
             println("\tD = ", D)
             println("\t\tUnivarié")
-            testMerge(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false)
+            testMerge_lda(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = false)
             println("\t\tMultivarié")
-            testMerge(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = true)
+            testMerge_lda(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit = time_limit, isMultivariate = true)
         end
     end
 
@@ -64,7 +64,7 @@ function main_merge_lda()
     CSV.write("results/main_merge_lda_results_$(timestamp).csv", results)
 end 
 
-function testMerge(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit::Int=-1, isMultivariate::Bool = false)
+function testMerge_lda(X_train, Y_train, X_test, Y_test, D, classes, results, dataSetName; time_limit::Int=-1, isMultivariate::Bool = false)
 
     # Pour tout pourcentage de regroupement considéré
     println("\t\t\tGamma\t\t# clusters\tGap")

@@ -20,7 +20,7 @@ function main_merge_exact()
         Iterations=Int[]
     )
 
-    for dataSetName in ["iris", "seeds", "wine", "breast_cancer_", "ecoli_"]
+    for dataSetName in ["iris", "seeds", "wine", "breast_cancer", "ecoli"]
         
         print("=== Dataset ", dataSetName)
         

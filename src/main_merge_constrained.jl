@@ -21,7 +21,7 @@ function main_merge_constrained()
         Iterations=Int[]  # Adding Iterations column
     )
 
-    for dataSetName in ["iris", "seeds", "wine", "breast_cancer_", "ecoli_"]
+    for dataSetName in ["iris", "seeds", "wine", "breast_cancer", "ecoli"]
         
         print("=== Dataset ", dataSetName)
         

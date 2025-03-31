@@ -17,7 +17,7 @@ function main()
     )
 
     # Pour chaque jeu de données
-    for dataSetName in ["iris", "seeds", "wine", "breast_cancer_", "ecoli_"]
+    for dataSetName in ["iris", "seeds", "wine", "breast_cancer", "ecoli"]
         
         print("=== Dataset ", dataSetName)
 
